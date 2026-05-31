@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>TC Rives d'Arcins</title>
+
+<style>
+
+body{
+font-family:Arial,sans-serif;
+margin:0;
+background:#f4f6f8;
+}
+
+header{
+background:#1e2a38;
+color:white;
+padding:15px;
+text-align:center;
+}
+
+.container{
+padding:20px;
+max-width:1400px;
+margin:auto;
+}
+
+.stats{
+background:white;
+padding:15px;
+border-radius:8px;
+margin-bottom:15px;
+box-shadow:0 2px 5px rgba(0,0,0,0.1);
+}
+
+input,select{
+padding:6px;
+margin:3px;
+font-size:13px;
+}
+
+button{
+padding:6px 10px;
+background:#1e2a38;
+color:white;
+border:none;
+cursor:pointer;
+border-radius:4px;
+font-size:12px;
+}
+
+button:hover{
+background:#32475f;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+background:white;
+box-shadow:0 2px 5px rgba(0,0,0,0.1);
+}
+
+th,td{
+padding:8px;
+border-bottom:1px solid #eee;
+font-size:13px;
+text-align:left;
+}
+
+th{
+background:#1e2a38;
+color:white;
+}
+
+tr:hover{
+background:#f5f7fa;
+}
+
+/* STATUT TEXTE */
+.green{color:#1e8e3e;font-weight:bold;}
+.orange{color:#e6a100;font-weight:bold;}
+.red{color:#d93025;font-weight:bold;}
+
+/* AGE */
+.age-low{color:#1e8e3e;font-weight:bold;}
+.age-mid{color:#e6a100;font-weight:bold;}
+.age-high{color:#d93025;font-weight:bold;}
+
+/* EXPLOITANTS */
+.francilite{
+color:#7b1fa2;
+font-weight:bold;
+}
+
+.ratp{
+color:#1b8f3a;
+font-weight:bold;
+}
+
+/* CONSTRUCTEUR */
+.brand-bold{
+font-weight:bold;
+}
+
+/* LIGNES STATUTS */
+.row-reserve{
+background:#ffe7b3 !important; /* orange léger */
+}
+
+.row-reformed{
+background:#ffd6d6 !important; /* rouge clair */
+}
+
+</style>
+</head>
+
+<body>
+
+<header>
+<h1>TC Rives d'Arcins</h1>
+<p>Gestion de flotte - Réseau fictif</p>
+</header>
+
+<div class="container">
+
+<!-- STATS -->
+<div class="stats">
+<h3>📊 Statistiques globales</h3>
+<p id="total"></p>
+<p id="avgAge"></p>
+</div>
+
+<!-- DEPOT -->
+<div class="stats">
+<h3>🏢 Dépôt</h3>
+<select id="filterDepot" onchange="onDepotChange()">
+<option value="">-- Tous les dépôts --</option>
+</select>
+<div id="depotStats" style="margin-top:10px;"></div>
+</div>
+
+<!-- AFFICHAGE -->
+<div class="stats">
+<h3>👀 Affichage</h3>
+<select id="viewMode" onchange="render()">
+<option value="all">🔎 Tous les bus</option>
+<option value="active">🟢 Actifs uniquement</option>
+<option value="reformed">🔴 Réformés uniquement</option>
+</select>
+</div>
+
+<!-- RECHERCHE -->
+<div class="stats">
+<h3>🔎 Recherche instantanée</h3>
+<input type="text" id="searchInput" onkeyup="render()" placeholder="Rechercher un véhicule..." style="width:300px;">
+</div>
+
+<!-- LISTE -->
+<h2>📋 Liste des bus</h2>
+
+<table>
+<thead>
+<tr>
+<th>N° / IDFM</th>
+<th>Constructeur</th>
+<th>Modèle</th>
+<th>Immat</th>
+<th>Mise en circulation</th>
+<th>Exploitant</th>
+<th>Dépôt</th>
+<th>Âge</th>
+<th>Statut</th>
+<th>Actions</th>
+</tr>
+</thead>
+
+<tbody id="list"></tbody>
+</table>
+
+<hr>
+
+<!-- FORM -->
+<h2>➕ Ajouter / Modifier un bus</h2>
+
+<input id="num" placeholder="N° de parc">
+<input id="num_idfm" placeholder="N° IDFM">
+<input id="brand" placeholder="Constructeur">
+<input id="model" placeholder="Modèle">
+<input id="plate" placeholder="Immatriculation">
+<input id="date" type="month">
+<input id="operator" placeholder="Exploitant">
+
+<select id="depot"></select>
+
+<select id="status">
+<option value="En service">🟢 En service</option>
+<option value="Réserve">🟠 Réserve</option>
+<option value="Réformé">🔴 Réformé</option>
+</select>
+
+<button id="mainBtn" onclick="addOrUpdateBus()">Ajouter</button>
+
+</div>
+
+<script>
+
+let buses = JSON.parse(localStorage.getItem("buses")) || [];
+let editIndex = null;
+
+const depots = [
+"Cergy-Pontoise – Confluence",
+"Défense Ouest – Nanterre",
+"Terres d'Envol – Mobilités",
+"Pompadour – Val-de-Marne",
+"Marne-la-Vallée",
+"Montlhéry – Paris-Saclay",
+"SQY",
+"Poissy – GPSEO",
+"Belliard – Ivry",
+"Val-Parisis – Mobilités",
+"Brunoy – Val-d'Yerres",
+"Melun – Val de Seine",
+"Évry – Centre Essonne"
+];
+
+function save(){
+localStorage.setItem("buses", JSON.stringify(buses));
+}
+
+function formatMonthFR(d){
+if(!d) return "";
+const m=["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+const [y,mo]=d.split("-");
+return m[mo-1]+" "+y;
+}
+
+function calculateAge(d){
+if(!d) return 0;
+return new Date().getFullYear() - parseInt(d.split("-")[0]);
+}
+
+function ageClass(age){
+if(age <= 5) return "age-low";
+if(age <= 10) return "age-mid";
+return "age-high";
+}
+
+function formatStatus(s){
+if(s === "En service") return "<span class='green'>🟢 En service</span>";
+if(s === "Réserve") return "<span class='orange'>🟠 Réserve</span>";
+return "<span class='red'>🔴 Réformé</span>";
+}
+
+function formatOperator(op){
+if(op === "Francilité — Rives d'Arcins"){
+return "<span class='francilite'>Francilité — Rives d'Arcins</span>";
+}
+if(op === "RATP Cap — Rives d'Arcins"){
+return "<span class='ratp'>RATP Cap — Rives d'Arcins</span>";
+}
+return op;
+}
+
+function updateStatus(i,value){
+buses[i].status = value;
+save();
+render();
+}
+
+function init(){
+depots.forEach(d=>{
+depot.innerHTML += `<option>${d}</option>`;
+filterDepot.innerHTML += `<option>${d}</option>`;
+});
+}
+
+function updateStats(){
+
+let service = buses.filter(b => b.status === "En service");
+let reserve = buses.filter(b => b.status === "Réserve");
+let reformes = buses.filter(b => b.status === "Réformé");
+
+document.getElementById("total").innerHTML =
+`🟢 En service : <b>${service.length}</b> | 🟠 Réserve : <b>${reserve.length}</b> | 🔴 Réformés : <b>${reformes.length}</b> | 📦 Total : <b>${buses.length}</b>`;
+
+let actifs = buses.filter(b => b.status !== "Réformé");
+
+let avg = actifs.length
+? (actifs.reduce((a,b)=>a+calculateAge(b.date),0)/actifs.length).toFixed(1)
+: 0;
+
+document.getElementById("avgAge").innerHTML =
+`📊 Âge moyen actif : <b>${avg} ans</b>`;
+
+let filter = document.getElementById("filterDepot").value;
+
+if(!filter){
+document.getElementById("depotStats").innerHTML = "Sélectionne un dépôt pour les stats.";
+return;
+}
+
+let depotActifs = buses.filter(b => b.depot === filter && b.status !== "Réformé");
+let depotReformes = buses.filter(b => b.depot === filter && b.status === "Réformé");
+
+let avgD = depotActifs.length
+? (depotActifs.reduce((a,b)=>a+calculateAge(b.date),0)/depotActifs.length).toFixed(1)
+: 0;
+
+document.getElementById("depotStats").innerHTML =
+`🟢 Actifs : <b>${depotActifs.length}</b><br>🔴 Réformés : <b>${depotReformes.length}</b><br>📊 Âge moyen : <b>${avgD} ans</b>`;
+}
+
+function addOrUpdateBus(){
+let data = {
+num:num.value,
+num_idfm:num_idfm.value,
+brand:brand.value,
+model:model.value,
+plate:plate.value,
+date:date.value,
+operator:operator.value,
+depot:depot.value,
+status:status.value
+};
+
+if(editIndex === null){
+buses.push(data);
+}else{
+buses[editIndex] = data;
+editIndex = null;
+mainBtn.innerText = "Ajouter";
+}
+
+save();
+render();
+}
+
+function editBus(i){
+let b = buses[i];
+num.value=b.num;
+num_idfm.value=b.num_idfm;
+brand.value=b.brand;
+model.value=b.model;
+plate.value=b.plate;
+date.value=b.date;
+operator.value=b.operator;
+depot.value=b.depot;
+status.value=b.status;
+editIndex=i;
+mainBtn.innerText="Mettre à jour";
+}
+
+function clearForm(){
+num.value="";
+num_idfm.value="";
+brand.value="";
+model.value="";
+plate.value="";
+date.value="";
+operator.value="";
+}
+
+function removeBus(i){
+buses.splice(i,1);
+save();
+render();
+}
+
+function duplicateBus(i){
+let b=buses[i];
+let num=parseInt(b.num);
+let idfm=parseInt(b.num_idfm);
+if(!isNaN(num)&&!isNaN(idfm)){
+buses.push({...b,num:(num+1).toString(),num_idfm:(idfm+1).toString(),plate:""});
+save();
+render();
+}
+}
+
+function onDepotChange(){render();}
+
+function render(){
+
+let depotFilter=document.getElementById("filterDepot").value;
+let mode=document.getElementById("viewMode").value;
+let search=document.getElementById("searchInput").value.toLowerCase();
+
+let list=document.getElementById("list");
+list.innerHTML="";
+
+buses
+.map((b,i)=>({b,i}))
+.filter(x=>!depotFilter||x.b.depot===depotFilter)
+.filter(x=>{
+if(mode==="active") return x.b.status!=="Réformé";
+if(mode==="reformed") return x.b.status==="Réformé";
+return true;
+})
+.filter(x=>{
+let t=(x.b.num+" "+x.b.num_idfm+" "+x.b.brand+" "+x.b.model+" "+x.b.plate+" "+x.b.operator+" "+x.b.depot).toLowerCase();
+return t.includes(search);
+})
+.sort((a,b)=>Number(a.b.num)-Number(b.b.num))
+.forEach(x=>{
+let b=x.b;
+let i=x.i;
+let age=calculateAge(b.date);
+
+let rowClass =
+b.status === "Réserve" ? "row-reserve" :
+b.status === "Réformé" ? "row-reformed" : "";
+
+list.innerHTML+=`
+<tr class="${rowClass}">
+<td><b>${b.num}</b> / ${b.num_idfm}</td>
+<td class="brand-bold">${b.brand}</td>
+<td>${b.model}</td>
+<td>${b.plate}</td>
+<td>${formatMonthFR(b.date)}</td>
+<td>${formatOperator(b.operator)}</td>
+<td>${b.depot}</td>
+<td class="${ageClass(age)}">${age} ans</td>
+<td>
+<select onchange="updateStatus(${i},this.value)">
+<option value="En service" ${b.status==="En service"?"selected":""}>🟢 En service</option>
+<option value="Réserve" ${b.status==="Réserve"?"selected":""}>🟠 Réserve</option>
+<option value="Réformé" ${b.status==="Réformé"?"selected":""}>🔴 Réformé</option>
+</select>
+</td>
+<td>
+<button onclick="editBus(${i})">Modifier</button>
+<button onclick="duplicateBus(${i})">Dupliquer</button>
+<button onclick="removeBus(${i})">Supprimer</button>
+</td>
+</tr>`;
+});
+
+updateStats();
+}
+
+init();
+render();
+
+</script>
+
+</body>
+</html>
